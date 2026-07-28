@@ -87,10 +87,10 @@ Video-pipeline tracking quality is measured with standard MOT metrics (MOTA, MOT
 
 | Metric | Score |
 |---|---|
-| Image-pipeline accuracy | _fill in_ |
-| Video-pipeline MOTA | _fill in_ |
-| Video-pipeline IDF1 | _fill in_ |
-| Jersey number accuracy (video) | _fill in_ |
+| Image-pipeline accuracy | _85%_ |
+| Video-pipeline (RAW) | _67.15%_ |
+| Video-pipeline (vote) | _84.53%_ |
+| Jersey number accuracy (video gt_eval) | _74.78%_ |
 
 ## Report
 
