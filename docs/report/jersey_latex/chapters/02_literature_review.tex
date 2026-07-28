@@ -1,0 +1,209 @@
+% =====================================================================
+% Chapter 2: Literature Review
+% =====================================================================
+\chapter{Literature Review}
+\label{ch:literature}
+
+\section{Introduction}
+
+Jersey number recognition sits at the intersection of three broad
+research streams: object detection and pose estimation, scene text
+recognition and OCR, and sports video analytics. Each of these areas
+has matured substantially over the past decade, and the specific design
+choices made in this thesis --- YOLOv8x with pose-driven torso
+localization for images, a football-specific YOLOv5 detector with
+ByteTrack for video, a multi-variant EasyOCR pipeline, and a
+transformer-based PARSeq recognizer with an EasyOCR fallback --- are
+each grounded in this prior work. This chapter surveys the most
+relevant developments in each area, discusses their reported strengths
+and limitations, and explains how they informed the design decisions
+taken in this thesis.
+
+\section{Object Detection and Pose Estimation}
+
+Object detection research has been shaped by the shift from two-stage,
+region-proposal-based detectors toward single-stage detectors that
+frame localization and classification as a single dense regression
+problem. The YOLO (You Only Look Once) family pioneered this
+single-stage paradigm, trading a small amount of accuracy for a very
+large gain in inference speed, which is essential for processing the
+thousands of player crops and video frames evaluated in this thesis
+\cite{redmon2016yolo}. The YOLOv8 architecture used in the image-based
+pipeline of this thesis extends its predecessors with an anchor-free
+detection head, decoupled classification and regression branches, and
+refined training recipes, and it is available pretrained on large-scale
+datasets such as COCO and ImageNet, allowing this thesis to use it
+directly as a generic person detector without task-specific
+fine-tuning \cite{ultralytics2023yolov8,deng2009imagenet}. For the
+video-based pipeline, a YOLOv5 model fine-tuned specifically on
+football broadcast footage is used instead of a generic person
+detector; this specialist model detects four semantic classes ---
+player, goalkeeper, referee, and ball --- and consistently outperforms
+generic person detectors in football-specific scenes because it has
+been trained on data that already reflects the distinctive appearance
+of players, kits, and camera angles found in broadcast football.
+
+Human pose estimation provides a complementary signal to plain bounding
+boxes: rather than treating a detected player as an undifferentiated
+rectangle, pose keypoints allow specific anatomical landmarks to be
+located within it. Part-affinity-field approaches such as OpenPose
+demonstrated that multiple people could be jointly and efficiently
+localized with a single forward pass, associating individual keypoints
+into complete skeletons even in crowded scenes \cite{cao2017openpose}.
+In the image pipeline of this thesis, YOLOv8x-Pose provides 17
+COCO-style human keypoints per detected person. Shoulder and hip
+keypoints are used to derive a tight torso bounding box, substantially
+narrowing the region that must be searched for a jersey number compared
+with using the full player box, and reducing the amount of background,
+limbs, and shorts that would otherwise dilute the OCR region of
+interest.
+
+\section{Multi-Object Tracking}
+
+Reliable player tracking across video frames is essential for the
+video-based pipeline, since jersey-number evidence for the same
+individual must be accumulated over multiple frames rather than
+inferred from a single, possibly blurred, observation. Classical
+tracking-by-detection approaches such as SORT associate detections
+across frames purely through Kalman-filter motion prediction and
+Hungarian-algorithm bounding-box matching, offering a simple and fast
+baseline but suffering from frequent identity switches whenever
+detections are momentarily missed \cite{bewley2016sort}. DeepSORT
+extended this approach with a learned appearance descriptor, reducing
+identity switches at the cost of an additional embedding network that
+must be run for every detection \cite{wojke2017deepsort}. ByteTrack
+takes a different approach: rather than discarding low-confidence
+detections outright, it performs a secondary association step using
+these low-confidence boxes to recover otherwise lost tracks, achieving
+state-of-the-art tracking accuracy while remaining detection-only and
+therefore computationally efficient \cite{zhang2022bytetrack}.
+ByteTrack does not require a separate re-identification network, making
+it well-suited to integration with detection-only models such as the
+YOLOv5 football detector used in this thesis, where every extra
+per-frame inference call directly adds to the already substantial OCR
+processing cost analyzed in Chapter~\ref{ch:results}.
+
+\section{Scene Text Recognition and OCR for Jersey Numbers}
+
+General-purpose OCR engines such as Tesseract were designed for
+high-contrast, well-segmented document text and consistently fail on
+scene text --- text appearing in natural images under unconstrained
+illumination, orientation, and background clutter. The shift from
+document OCR to scene text recognition was driven substantially by
+end-to-end trainable sequence models: CRNN combines a convolutional
+feature extractor with a recurrent sequence model and a CTC decoding
+layer, removing the need for explicit character segmentation
+\cite{shi2017crnn}. Robust scene-text \emph{detection}, as opposed to
+recognition, was advanced by CRAFT, which localizes individual
+character regions and their affinity to neighboring characters rather
+than predicting a single bounding box per word, making it considerably
+more robust to the curved, rotated, and partially occluded text
+encountered on jersey fabric \cite{baek2019craft}. EasyOCR, used
+extensively in the image-based pipeline of this thesis, combines a
+CRAFT-style text detector with a CRNN-style recognizer and provides a
+practical, freely available starting point for digit recognition in
+natural images; however, as documented later in
+Chapter~\ref{ch:methodology}, its out-of-the-box performance on small,
+low-resolution jersey-digit regions remains insufficient without the
+multi-variant enhancement, zoom, and shape-disambiguation strategy
+developed in this thesis.
+
+More recently, transformer-based sequence models have overtaken
+CRNN-style recognizers on standard scene-text benchmarks. PARSeq
+formulates scene text recognition as a permuted autoregressive sequence
+modeling problem, allowing the same architecture to be trained and
+used in both autoregressive and non-autoregressive decoding modes and
+achieving strong accuracy on curved and occluded text while remaining
+attention-based rather than recurrent \cite{bautista2022parseq}, an
+approach that builds directly on the general-purpose Transformer
+architecture \cite{vaswani2017attention}. The video-based pipeline in
+this thesis adopts PARSeq as its primary OCR backend for jersey digits,
+attempting to load the pretrained PARSeq model at start-up and falling
+back automatically to EasyOCR whenever PARSeq cannot be loaded in the
+runtime environment, which provides a practical balance between the
+stronger sequence modeling of a transformer-based recognizer and the
+robustness of a widely deployed fallback engine.
+
+Several prior works have specifically targeted jersey number recognition
+as a component of player re-identification in sports video
+\cite{gerke2015soccer,li2018jersey}. Gerke et al.\ combine a
+hand-crafted HOG feature representation with an SVM classifier and a
+temporal voting stage over multiple frames of the same player, an
+architecture that pre-dates the deep-learning era but already
+identifies the two design principles that recur throughout the later
+literature and throughout this thesis: (a) accurate localization of the
+digit region is the dominant factor in recognition accuracy, and (b)
+temporal aggregation of single-frame results across multiple
+observations of the same player substantially improves the final
+prediction \cite{gerke2015soccer}. Li et al.\ replace the hand-crafted
+pipeline with a CNN-LSTM architecture and add an explicit legibility
+filter so that OCR is only attempted on crops likely to contain a
+readable digit, reporting a further accuracy gain from this filtering
+step \cite{li2018jersey}. Both observations are directly reflected in
+the design of the pipelines presented in this thesis: pose-driven torso
+localization narrows the OCR search region in the image pipeline, a
+temporal jersey voting mechanism aggregates evidence in the video
+pipeline, and a dedicated ResNet-18 legibility classifier filters
+unreadable crops in the image pipeline.
+
+\section{The SoccerNet Dataset}
+
+The SoccerNet initiative provides one of the largest collections of
+annotated broadcast football video, with tasks spanning action
+spotting, player tracking, camera calibration, and jersey number
+recognition \cite{deliege2021soccernet}. The SN-Jersey-2023 sub-task
+provides cropped player images organized by player identity, with
+ground-truth jersey numbers in JSON format; this thesis uses a curated
+subset of this sub-task for the image-based pipeline. The SoccerNet
+Tracking sub-task, together with videos collected from the Hugging Face
+SoccerNet SN-PCBAS release and from Rutracker.org, provides
+full-resolution broadcast clips with per-frame player bounding-box
+annotations in MOT format, which serve as the source of both the ten
+video clips and the tracking ground-truth files used in the video
+pipeline of this thesis. Because SoccerNet does not provide manually
+verified jersey-number ground truth for these particular tracking
+clips, this thesis additionally produced manually annotated
+jersey-number CSV files using CVAT, as described in
+Chapter~\ref{ch:methodology}, so that video-pipeline accuracy could be
+reported against genuine ground truth rather than against the
+pipeline's own internal predictions.
+
+\section{Legibility Classification}
+
+Not every cropped player image contains a recognizable jersey number.
+Players may face the camera directly, showing only a front sponsor
+logo rather than a jersey number, be heavily occluded by another
+player or the ball, or appear at a resolution too low to resolve the
+digits at all. Several prior jersey recognition works include a
+legibility pre-filter so that OCR is only attempted on crops that are
+likely to yield a valid result \cite{li2018jersey}. Training such a
+filter typically requires either costly manual annotation of legibility
+labels or, as in this thesis, an automatic weak-labeling strategy in
+which a crop is labeled legible whenever the multi-variant OCR pipeline
+already returns a sufficiently confident digit reading. This thesis
+trains a ResNet-18 binary classifier for this purpose, using the
+ImageNet-pretrained backbone popularized by residual networks
+\cite{he2016resnet,deng2009imagenet}, thereby avoiding the need for
+costly manual annotation of legibility while still obtaining a learned,
+image-based signal that is complementary to the OCR engine's own
+confidence score.
+
+\section{Summary}
+
+The works reviewed in this chapter collectively motivate the principal
+design choices of this thesis: YOLOv8x for image-based player
+detection due to its strong accuracy and available pose variant; a
+specialist YOLOv5 football model for video-based detection, providing
+semantic class labels for player, goalkeeper, and referee; ByteTrack
+for multi-frame identity association in video, chosen over SORT and
+DeepSORT for its favorable accuracy-to-cost trade-off; a multi-variant
+EasyOCR pipeline with domain-specific enhancement, shape-based digit
+disambiguation, and dynamic zoom to compensate for the well-documented
+limitations of general-purpose OCR on jersey digits in the image
+pipeline; a PARSeq transformer-based recognizer with an EasyOCR
+fallback for the video pipeline, reflecting the shift toward
+attention-based scene text recognition; and a ResNet-18 legibility
+classifier together with a temporal jersey voting mechanism to provide
+complementary signals for improving recognition reliability.
+Chapter~\ref{ch:methodology} describes how these components were
+implemented and combined.

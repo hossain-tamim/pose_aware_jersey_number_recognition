@@ -1,0 +1,142 @@
+% =====================================================================
+% Chapter 6: Conclusion and Future Work
+% =====================================================================
+\chapter{Conclusion and Future Work}
+\label{ch:conclusion}
+
+\section{Conclusion}
+
+This thesis developed, implemented, and evaluated a two-part
+deep-learning system for jersey number recognition in football images
+and broadcast video.
+
+The \textbf{image-based pipeline} combined YOLOv8x person detection,
+YOLOv8x-Pose-based torso localization from shoulder and hip keypoints,
+a multi-stage image enhancement module, and a multi-variant EasyOCR
+engine incorporating dynamic zoom, multiple binarization strategies,
+per-digit isolation, projection-based digit splitting, and a
+shape-based 0/6/8/9 and 1/7 disambiguation module. A ResNet-18-based
+\textbf{legibility classifier} trained on weakly-labeled crops
+achieved a best validation accuracy of \textbf{94.55\%}, an ROC-AUC
+of \textbf{0.955}, and an average precision of \textbf{0.993}, with
+97.87\% accuracy on legible crops and 75.00\% on illegible crops.
+
+The \textbf{video-based pipeline} processed ten broadcast football
+clips using a domain-specific \textbf{YOLOv5 football detection model}
+combined with the \textbf{ByteTrack} tracker, a temporal role voter for
+referee identification, four-variant PARSeq torso processing with an
+automatic EasyOCR fallback, and a
+\textbf{temporal jersey voting mechanism} over a 60-frame sliding
+window. Evaluated against manually annotated ground truth, the system
+achieved an average \textbf{tracking accuracy of 95.16\%} (IDF1:
+0.692) across 10 videos and a \textbf{GT OCR accuracy of 74.78\%} per
+track, rising to \textbf{84.53\%} after applying temporal voting on the
+same evaluation rows --- an absolute improvement of 17.4 percentage
+points over single-frame predictions. The overall pipeline accuracy
+averaged \textbf{79.72\%} across all ten clips.
+
+These results confirm that \textbf{accurate spatial localization},
+\textbf{targeted image enhancement}, \textbf{multi-strategy OCR with
+shape-based refinement}, and \textbf{temporal aggregation} are all
+necessary, complementary components of a practical jersey-number
+recognition system, and that no single component alone is sufficient.
+Temporal voting, in particular, consistently delivered the largest
+single performance gain across all clips, a finding that aligns with
+and independently validates conclusions drawn in prior work
+\cite{gerke2015soccer,li2018jersey}.
+
+\section{Limitations}
+
+The following limitations of the current system should be acknowledged:
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Limited image evaluation scale:} The image pipeline
+    was evaluated on 353 player-image folders rather than the full
+    SoccerNet dataset (over 1.2 million images) due to computational
+    constraints.
+    \item \textbf{Computational cost of detection and OCR:} Running a
+    full-resolution YOLOv5 detection pass on every video frame, combined
+    with PARSeq/EasyOCR inference on four enhanced variants for every
+    detected player in every frame, results in a high total processing
+    cost (Section~\ref{sec:results-video}), making the current video
+    pipeline unsuitable for real-time deployment without further
+    optimization.
+    \item \textbf{Weak legibility labels:} The legibility classifier was
+    trained on OCR-confidence-derived labels rather than human-verified
+    annotations, which may introduce label noise.
+    \item \textbf{Digit-range assumption:} The system handles only
+    1--2 digit jersey numbers in $[1, 99]$; non-standard markings or
+    three-digit numbers are not supported.
+    \item \textbf{Fixed torso fraction:} The video pipeline uses a
+    fixed-fraction heuristic for torso extraction rather than
+    pose-driven keypoints, which may miss digit regions when the player
+    is at an oblique angle.
+    \item \textbf{Limited clip diversity:} The ten evaluated clips
+    share similar broadcast characteristics; generalization to different
+    leagues, camera positions, or stadium lighting has not been
+    systematically tested.
+\end{enumerate}
+
+\section{Future Work}
+
+Building on the findings and limitations identified above, the following
+directions are proposed for future investigation:
+
+\begin{enumerate}
+    \item \textbf{Purpose-trained digit classifier:} Replace or
+    supplement the video pipeline's PARSeq recognizer with a small CNN
+    trained directly on cropped jersey-digit images from SoccerNet. This
+    would likely improve both accuracy and inference speed by avoiding
+    the overhead of a general-purpose scene-text recognizer.
+
+    \item \textbf{Pose-driven torso extraction in the video pipeline:}
+    Integrate YOLOv8-Pose into the video pipeline to derive keypoint-based
+    torso boxes, replicating the more accurate localization strategy of
+    the image pipeline.
+
+    \item \textbf{Evaluation at full dataset scale:} Re-run the image
+    pipeline on the complete SoccerNet SN-Jersey dataset ($>$1.2 million
+    images) to obtain statistically robust accuracy figures and to
+    provide more training data for the legibility classifier.
+
+    \item \textbf{Real-time optimization:} As shown in
+    Section~\ref{sec:results-video}, detection now accounts for the
+    largest share of total processing time (56.2\%), ahead of OCR
+    (42.8\%). Reducing the per-frame detection cost --- for example by
+    running detection on a downscaled frame, using a lighter YOLOv5
+    variant, or detecting on every second or third frame and relying on
+    ByteTrack's motion prediction to bridge the gaps --- combined with
+    batching OCR calls across all crops in a frame, is the most direct
+    path toward real-time operation.
+
+    \item \textbf{Broader video diversity:} Evaluate the video pipeline
+    on clips from multiple leagues, broadcast angles, and stadium
+    lighting conditions to assess generalization.
+
+    \item \textbf{Multi-camera tracklet fusion:} Aggregate jersey-number
+    evidence across multiple camera angles or over longer tracklets
+    by incorporating player re-identification, increasing the evidence
+    available to the voting mechanism.
+
+    \item \textbf{End-to-end fine-tuning:} Jointly fine-tune the
+    detection backbone and digit recognition head on the jersey-number
+    task rather than relying exclusively on off-the-shelf pretrained
+    weights.
+\end{enumerate}
+
+\section{Final Remarks}
+
+This thesis has demonstrated that combining a domain-specific football
+detection model, reliable multi-object tracking, targeted image
+enhancement, multi-strategy OCR with shape-based refinement, and
+temporal aggregation can produce a meaningfully effective jersey number
+recognition system for both static images and broadcast video.
+The consistent 17-percentage-point gain from temporal voting
+reinforces a key principle that is well-supported in prior literature
+and has practical implications for any system aiming to identify players
+from broadcast footage at scale.
+
+The complete source code developed for this thesis, covering both the
+image-based and video-based pipelines, has been made publicly
+available in a source-code repository, the link to which is provided
+in the Abstract.

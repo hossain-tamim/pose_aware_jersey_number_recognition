@@ -1,0 +1,100 @@
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{xurl}
+\usepackage{listings}
+\usepackage[numbers,sort&compress]{natbib}
+\bibliographystyle{plainnat}
+\usepackage[
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+]{hyperref}
+
+\geometry{a4paper,left=1.25in,right=1in,top=1in,bottom=1in,headheight=15pt}
+\onehalfspacing
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\fancyhead[L]{\nouppercase{\leftmark}}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\Large}{\chaptertitlename\ \thechapter}{10pt}{\Large}
+\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+
+\tolerance=1000
+\hbadness=3000
+\emergencystretch=2em
+\hfuzz=20pt
+
+\lstdefinestyle{pythonstyle}{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    frame=single,
+    breaklines=true,
+    breakatwhitespace=false,
+    showstringspaces=false,
+    tabsize=4,
+    columns=fullflexible,
+    xleftmargin=1em,
+    xrightmargin=0.5em
+}
+\lstset{style=pythonstyle}
+
+\newcommand{\projecttitle}{Vision-Guided Jersey Number Recognition: A Pose-Aware Torso Localization and Multi-Variant OCR Pipeline for Football Player Identification in Images and Broadcast Video}
+
+\begin{document}
+
+\pagenumbering{roman}
+\input{chapters/00_titlepage}
+\input{chapters/00_declaration}
+\input{chapters/00_certificate}
+\input{chapters/00_acknowledgement}
+\input{chapters/00_ai_statement}
+\input{chapters/00_abstract}
+\tableofcontents\clearpage
+\listoffigures\clearpage
+\listoftables\clearpage
+\input{chapters/00_abbreviations}
+
+\pagenumbering{arabic}
+\input{chapters/01_introduction}
+\input{chapters/02_literature_review}
+\input{chapters/03_methodology}
+\input{chapters/04_system_design}
+\input{chapters/05_results}
+\input{chapters/06_conclusion}
+
+\clearpage
+\addcontentsline{toc}{chapter}{References}
+\bibliography{references}
+
+\appendix
+\input{chapters/07_appendix}
+
+\end{document}

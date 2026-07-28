@@ -1,0 +1,26 @@
+# Core deep learning
+torch
+torchvision
+
+# Detection / pose
+ultralytics          # YOLOv8x, YOLOv8x-Pose
+
+# Tracking
+# ByteTrack is typically vendored or installed from source/GitHub — adjust if needed
+
+# OCR
+easyocr
+# PERSeq — installed from its source repo; add the specific install command you used
+
+# Evaluation
+motmetrics
+
+# Data / utils
+numpy
+pandas
+scikit-learn
+opencv-python
+matplotlib
+
+# Note: run `pip freeze > requirements.txt` in your working Colab/local env
+# to lock exact versions before your final commit.

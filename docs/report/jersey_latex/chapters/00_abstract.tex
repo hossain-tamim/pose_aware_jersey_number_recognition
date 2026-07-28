@@ -1,0 +1,41 @@
+% =====================================================================
+% Abstract
+% =====================================================================
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Automatic jersey number recognition from football images and broadcast
+video is a challenging computer vision task involving motion blur,
+occlusion, low digit resolution, and extreme scale variation, and this
+thesis develops and evaluates two complementary deep-learning pipelines
+to address it. The image-based pipeline localizes each player in
+SoccerNet SN-Jersey images using a YOLOv8x detector, derives a torso box
+from YOLOv8x-Pose shoulder and hip keypoints, and processes the
+jersey-number region through a multi-variant EasyOCR engine combining
+dynamic zooming, multiple binarization strategies, per-digit isolation,
+projection-based splitting, and shape-based digit disambiguation; a
+ResNet-18 legibility classifier trained on weakly-labeled crops
+determines whether a region is readable, achieving a best validation
+accuracy of 94.55\%, an ROC-AUC of 0.955, and an average precision of
+0.993. The video-based pipeline processes ten broadcast clips using a
+YOLOv5 football detection model with the ByteTrack multi-object
+tracker; a temporal role voter identifies referee tracks, while jersey
+numbers are read from torso crops using a PARSeq scene-text recognizer
+that falls back automatically to EasyOCR when unavailable. A temporal
+jersey voting mechanism aggregates per-frame predictions into a final
+jersey number per track; evaluated against manually annotated ground
+truth, the system achieves an average tracking accuracy of 95.16\% and
+a ground-truth OCR accuracy of 74.78\%, rising to 84.53\% after
+temporal voting, with an overall pipeline accuracy of 79.72\%. These
+results confirm that accurate localization, targeted enhancement,
+multi-strategy OCR, and temporal aggregation are all necessary and
+complementary for reliable jersey-number recognition. The complete
+source code is publicly available at
+\url{https://github.com/hossain-tamim/pose_aware_jersey_number_recognition}.
+
+\vspace{0.5cm}
+\noindent\textbf{Keywords:} Jersey Number Recognition, YOLOv8, ByteTrack,
+Pose Estimation, EasyOCR, PARSeq, Temporal Voting, Deep Learning,
+SoccerNet, Sports Analytics.
+
+\clearpage

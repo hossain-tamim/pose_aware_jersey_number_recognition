@@ -1,0 +1,150 @@
+% =====================================================================
+% Chapter 1: Introduction
+% =====================================================================
+\chapter{Introduction}
+\label{ch:introduction}
+
+\section{Overview}
+\label{sec:overview}
+
+Football (soccer) is the most widely followed sport in the world, and
+the broadcast analysis of matches generates a substantial volume of
+visual data each season. Identifying individual players in this data
+stream is a fundamental requirement for many downstream applications,
+including automated highlight generation, tactical analysis, player
+performance monitoring, and real-time statistics overlays for
+television audiences. Although player identity can, in principle, be
+inferred from facial features, gait patterns, or team-roster information,
+the jersey number printed on a player's shirt remains the most
+direct, universally interpretable, and camera-accessible cue for
+player identification in broadcast footage.
+
+Despite appearing straightforward at first glance, automatic jersey
+number recognition is a genuinely difficult computer vision task. The
+digit regions occupy only a small fraction of a typical video frame,
+are routinely blurred by player motion, may be partly hidden by the
+ball, other players, or a player's own limbs, and can appear at
+steep viewing angles due to broadcast camera placement. Jersey color,
+fabric texture, typeface variation across teams, and the extremely low
+resolution of digit patches in standard broadcast video complicate the
+task further. Simply passing a full frame or an uncropped player
+bounding box to a general-purpose OCR engine consistently yields poor
+recognition results.
+
+This thesis addresses these challenges by designing, implementing, and
+evaluating a complete jersey number recognition system that functions in
+two complementary modes. The first is image-based recognition,
+evaluated on the SoccerNet SN-Jersey dataset, which provides cropped
+player images grouped by player identity together with ground-truth
+jersey numbers. The second is video-based recognition, evaluated on ten
+broadcast football clips from the SoccerNet tracking dataset (videos
+sourced from the Hugging Face SoccerNet SN-PCBAS release and from
+Rutracker.org), where players must first be detected and tracked across
+frames before OCR evidence can be accumulated over time. Both pipelines
+share a conceptual foundation --- player or torso localization followed
+by image enhancement and OCR --- but differ substantially in
+implementation due to the different nature of their inputs: isolated
+player crops versus continuous video streams.
+
+\section{Motivation}
+\label{sec:motivation}
+
+Several practical and academic considerations motivated this research.
+From an applied standpoint, automated player identification is a
+fundamental building block for modern broadcast and club analytics
+platforms, since manual annotation of jersey numbers across hours of
+footage is both prohibitively expensive and unacceptably slow for
+operational use. General-purpose OCR engines, including Tesseract and
+out-of-the-box EasyOCR, are designed for scanned documents and perform
+poorly on the small, distorted, stylized digits encountered on curved
+fabric under variable stadium lighting, so a domain-specific pipeline
+with targeted pre-processing and a multi-variant recognition strategy
+is essential to obtain acceptable accuracy. Precise spatial
+localization is equally important: jersey digits typically occupy only
+a tiny region of a broadcast frame, and without accurate player
+detection and torso localization, OCR cannot be reliably directed to
+the correct region of interest. In video, temporal redundancy offers a
+further opportunity, since a single frame often yields no usable OCR
+result due to motion blur or occlusion, while a given player typically
+appears across many consecutive frames; exploiting this temporal
+information through a voting mechanism substantially improves overall
+recognition reliability. Finally, jersey number recognition integrates
+several core deep-learning and computer vision topics --- object
+detection, pose estimation, multi-object tracking, image enhancement,
+OCR, and binary classification --- making it an ideal capstone project
+for demonstrating practical, integrated skills.
+
+\section{Problem Statement}
+\label{sec:problem-statement}
+
+Given either a static image of a football player or a broadcast video
+clip containing multiple players, the goal of this thesis is to
+automatically detect and localize each player, tracking each one
+persistently across frames using a unique identity when the input is
+video; derive the torso region of each player, which is the most
+likely location of the jersey number; enhance the localized region to
+compensate for blur, poor contrast, and noise; recognize the one- or
+two-digit jersey number from the enhanced torso crop using OCR; and,
+for video, aggregate per-frame OCR predictions into a single, reliable
+jersey-number estimate per tracked player through a temporal voting
+mechanism. The system must additionally provide a means of
+distinguishing legible jersey crops from illegible ones, so that
+downstream components receive information about prediction confidence.
+
+\section{Objectives}
+\label{sec:objectives}
+
+The specific objectives of this thesis are, first, to design and
+implement a YOLOv8-based player detection and YOLOv8x-Pose-based torso
+localization pipeline for the image-based SoccerNet SN-Jersey dataset;
+second, to build a global image-enhancement module combining
+denoising, CLAHE, bilateral filtering, and unsharp masking to improve
+jersey patch quality prior to OCR; third, to develop a multi-variant
+OCR pipeline using EasyOCR that incorporates dynamic zoom, multiple
+binarization strategies, per-digit isolation, projection-based digit
+splitting, rotation correction, and shape-based digit disambiguation
+for the digit pairs 0/6/8/9 and 1/7; fourth, to train a ResNet-18-based
+binary legibility classifier that identifies whether a cropped jersey
+region is readable, using weak labels derived automatically from OCR
+confidence scores; fifth, to design and implement a video-based
+pipeline that uses a specialist football detection model (YOLOv5) with
+ByteTrack multi-object tracking, a temporal role voter for referee
+identification, and a PARSeq-based jersey OCR processor with automatic
+fallback to EasyOCR; sixth, to implement a temporal jersey voting
+mechanism that aggregates per-frame jersey number predictions over a
+sliding window per track, and to evaluate it against manually
+annotated ground truth across ten broadcast clips; and finally, to
+evaluate both pipelines using quantitative metrics including confusion
+matrices, player-level accuracy, tracking metrics (MOTA / IDF1), OCR
+success rates before and after temporal voting, and processing-time
+breakdowns.
+
+\section{Scope of the Thesis}
+\label{sec:scope}
+
+This thesis focuses specifically on the visual recognition of jersey
+numbers and does not attempt to solve the full player re-identification
+problem. The image-based pipeline is evaluated on a curated subset of
+353 player-image folders from the SoccerNet SN-Jersey-2023 dataset (269
+training, 84 test). The video-based pipeline is evaluated on ten
+broadcast clips (001--010.mp4), each 900 frames in length, collected
+from the Hugging Face SoccerNet SN-PCBAS dataset (Videos 001--007) and
+Rutracker.org (Videos 008--010), and evaluated against manually
+annotated ground-truth CSV files. The system assumes jersey numbers
+consist of one or two digits in the range 1--99. Multi-camera fusion,
+three-digit numbers, and non-numeric jersey markings are outside the
+scope of this work.
+
+\section{Organization of the Report}
+\label{sec:organization}
+
+Chapter~\ref{ch:literature} reviews related work in jersey number
+recognition, scene text recognition, and sports analytics.
+Chapter~\ref{ch:methodology} describes the datasets, pre-processing
+pipeline, model architectures, algorithmic formulation, and evaluation
+metrics. Chapter~\ref{ch:system-design} presents the implementation
+details for both pipelines, including workflow diagrams.
+Chapter~\ref{ch:results} presents experimental results, with a
+comparative discussion against prior work from the literature.
+Chapter~\ref{ch:conclusion} concludes the thesis and outlines
+directions for future work.

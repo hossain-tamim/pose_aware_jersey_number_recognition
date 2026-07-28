@@ -1,0 +1,47 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Jupyter / Colab ---
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+
+# --- Model weights & checkpoints (usually too large for git) ---
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt
+weights/
+checkpoints/
+
+# --- Datasets (link/download instructions instead of committing raw data) ---
+data/raw/
+data/SoccerNet*/
+*.mp4
+*.avi
+
+# --- Logs, caches, OS junk ---
+*.log
+.cache/
+.DS_Store
+Thumbs.db
+
+# --- Environment / secrets ---
+.env
+
+# --- LaTeX build artifacts (keep .tex, ignore build junk) ---
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz

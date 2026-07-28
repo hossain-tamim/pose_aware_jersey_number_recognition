@@ -1,0 +1,39 @@
+% =====================================================================
+% Statement on the Use of AI and Digital Tools
+% =====================================================================
+\chapter*{Statement on the Use of AI and Digital Tools}
+\addcontentsline{toc}{chapter}{Statement on the Use of AI and Digital Tools}
+
+In the course of carrying out this thesis, several AI-assisted and
+digital tools were used to support --- but not to replace --- the
+authors' own analysis, implementation, and writing. In the interest of
+academic transparency, their use is disclosed below.
+
+\textbf{AI conversational assistants.} OpenAI's ChatGPT and
+Anthropic's Claude were used at various stages of this work to help
+debug Python and PyTorch code, clarify library documentation and API
+usage (e.g.\ for Ultralytics YOLOv8, ByteTrack, and EasyOCR),
+brainstorm alternative approaches to specific implementation problems,
+and improve the clarity and grammar of report text drafted by the
+authors. All code produced with such assistance was reviewed,
+tested, and adapted by the authors before inclusion in the pipelines,
+and all technical claims, experimental results, and conclusions
+reported in this thesis reflect the authors' own work and analysis.
+
+\textbf{Annotation tooling.} CVAT (Computer Vision Annotation Tool)
+was used to manually annotate ground-truth jersey numbers and player
+bounding boxes for the broadcast video clips evaluated in
+Chapter~\ref{ch:results}, as described in
+Section~\ref{sec:gt-eval}. All annotations produced in CVAT were
+created and verified manually by the authors.
+
+\textbf{Cloud compute platforms.} Google Colab and Kaggle provided the
+GPU compute environments (NVIDIA T4/P100) used to train the legibility
+classifier and to run both pipelines at scale, as noted in
+Section~\ref{sec:software-env}.
+
+The use of these tools is consistent with the authors' department
+guidelines on the responsible use of AI assistance in academic work:
+they were used to accelerate implementation and improve writing
+quality, not to generate the thesis's experimental design, results,
+or conclusions, which remain the original work of the authors.

@@ -1,0 +1,342 @@
+% =====================================================================
+% Appendix A: Source Code and Supplementary Material
+% =====================================================================
+\chapter{Source Code and Supplementary Material}
+\label{ch:appendix}
+
+The complete implementation of both pipelines developed for this
+thesis, covering the image-based and video-based systems described in
+Chapters~\ref{ch:methodology} and~\ref{ch:system-design}, has been made
+publicly available as open-source code; the repository link is provided
+in the Abstract. The repository contains the following materials:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{\texttt{jersey\_recognition\_images.ipynb}} --- Complete
+    image pipeline notebook: SoccerNet data loading, YOLOv8x detection,
+    YOLOv8x-Pose torso localization, multi-variant OCR pipeline with
+    dynamic zoom and shape-based digit disambiguation, ResNet-18
+    legibility classifier training, and player-level evaluation.
+
+    \item \textbf{\texttt{jersey\_recognition\_videos.ipynb}} --- Complete
+    video pipeline notebook: YOLOv5 football detection, ByteTrack
+    multi-object tracking, temporal role voter for referee
+    identification, PARSeq (with EasyOCR fallback) digit recognition on
+    torso crops, temporal jersey voting (60-frame window), and
+    ground-truth evaluation against MOT and jersey-number CSV files.
+
+    \item \textbf{\texttt{output/}} --- All output figures, CSV manifests,
+    and evaluation reports produced by both pipelines.
+
+    \item \textbf{\texttt{gt/}} --- Manually annotated ground-truth
+    jersey-number CSV files for all ten evaluated broadcast clips.
+\end{itemize}
+
+Key implementation modules and their roles are summarized in
+Table~\ref{tab:code-modules}, and representative source-code excerpts
+for each are given in Sections~\ref{sec:appx-image-code}
+and~\ref{sec:appx-video-code}. Excerpts are lightly trimmed (error
+handling and logging statements omitted) for print length; the complete,
+runnable versions are in the notebooks listed above.
+
+\begin{table}[H]
+    \centering
+    \caption{Key implementation modules referenced in this thesis.}
+    \label{tab:code-modules}
+    \small
+    \begin{tabular}{@{}p{4.5cm}p{3cm}p{5.5cm}@{}}
+        \toprule
+        \textbf{Module / Class} & \textbf{Pipeline} & \textbf{Role} \\
+        \midrule
+        \texttt{clean\_main\_image()} & Image & Denoising, CLAHE contrast, and unsharp masking \\
+        \texttt{PlayerDetector} & Image & YOLOv8x person detection with fallback cascade \\
+        \texttt{PoseHelper} & Image & YOLOv8x-Pose keypoint extraction and torso derivation \\
+        \texttt{ocr\_digits\_strict()} & Image & Multi-variant OCR: zoom, binarize, split, shape vote \\
+        \texttt{LegibilityModel} & Image & ResNet-18 binary legibility classifier \\
+        \texttt{JerseyRecognizer} & Video & PARSeq recognizer with automatic EasyOCR fallback \\
+        \texttt{BYTETracker} & Video & Standalone ByteTrack multi-object tracker \\
+        \texttt{TemporalRoleVoter} & Video & Referee identification via semantic class history \\
+        \texttt{TemporalJerseyVoter} & Video & 60-frame sliding-window jersey number aggregation \\
+        \texttt{GroundTruthTrackingAndJerseyEvaluator} & Video & Ground-truth tracking and OCR accuracy evaluator \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Image Pipeline --- Selected Code Excerpts}
+\label{sec:appx-image-code}
+
+\subsection{Global Image Cleaning}
+
+\begin{lstlisting}[caption={\texttt{clean\_main\_image()} --- denoising, CLAHE contrast, and unsharp masking applied to every input image before detection (Section~\ref{sec:preprocessing}).}]
+def clean_main_image(img_bgr):
+    """Denoise + CLAHE contrast + edge-preserving smoothing + unsharp mask."""
+    if img_bgr is None or img_bgr.size == 0:
+        return img_bgr
+    dn = cv2.fastNlMeansDenoisingColored(img_bgr, None, 5, 5, 7, 15)
+    lab = cv2.cvtColor(dn, cv2.COLOR_BGR2LAB)
+    L, A, B = cv2.split(lab)
+    L = cv2.createCLAHE(clipLimit=1.6, tileGridSize=(8, 8)).apply(L)
+    cont = cv2.cvtColor(cv2.merge([L, A, B]), cv2.COLOR_LAB2BGR)
+    smooth = cv2.bilateralFilter(cont, d=0, sigmaColor=18, sigmaSpace=6)
+    blur = cv2.GaussianBlur(smooth, (0, 0), 1.0)
+    sharp = cv2.addWeighted(smooth, 1.35, blur, -0.35, 0)
+    return sharp
+\end{lstlisting}
+
+\subsection{Player Detection and Pose Estimation}
+
+\begin{lstlisting}[caption={\texttt{PlayerDetector} and \texttt{PoseHelper} --- YOLOv8x person detection and YOLOv8x-Pose keypoint extraction, each with a cascading fallback across model sizes (Section~\ref{sec:models}).}]
+class PlayerDetector:
+    def __init__(self, weights=None):
+        self.model = None
+        tried = ([weights] if weights else []) + \
+                ["yolov8x.pt", "yolov8l.pt", "yolov8m.pt", "yolov8s.pt", "yolov8n.pt"]
+        for w in tried:
+            try:
+                self.model = YOLO(w)
+                print(f"[det] Using {w}")
+                break
+            except Exception as e:
+                print(f"[det] Failed {w}: {e}")
+
+    def detect_players(self, image_path, conf=PLAYER_CONF):
+        if self.model is None:
+            return np.empty((0, 4))
+        r = self.model(image_path, conf=conf, verbose=False, max_det=50)[0]
+        b = r.boxes.xyxy.detach().cpu().numpy() \
+            if r.boxes is not None and r.boxes.xyxy is not None else np.empty((0, 4))
+        if r.boxes is not None and r.boxes.cls is not None:
+            cls = r.boxes.cls.detach().cpu().numpy().astype(int)
+            b = b[cls == 0]  # class 0 = person
+        return b if b.size else np.empty((0, 4))
+
+class PoseHelper:
+    def __init__(self, weights=None):
+        self.model = None
+        tried = ([weights] if weights else []) + \
+                ["yolov8x-pose.pt", "yolov8l-pose.pt", "yolov8m-pose.pt",
+                 "yolov8s-pose.pt", "yolov8n-pose.pt"]
+        for w in tried:
+            try:
+                self.model = YOLO(w)
+                print(f"[pose] Using {w}")
+                break
+            except Exception as e:
+                print(f"[pose] Failed {w}: {e}")
+
+    def infer(self, image_path, conf=POSE_CONF):
+        if self.model is None:
+            return {"boxes": np.empty((0, 4)), "kpts": None}
+        r = self.model(image_path, conf=conf, verbose=False, max_det=50)[0]
+        b = r.boxes.xyxy.detach().cpu().numpy() \
+            if r.boxes is not None and r.boxes.xyxy is not None else np.empty((0, 4))
+        k = None
+        if hasattr(r, "keypoints") and r.keypoints is not None \
+                and r.keypoints.xy is not None:
+            k = r.keypoints.xy.detach().cpu().numpy()
+        return {"boxes": b if b.size else np.empty((0, 4)), "kpts": k}
+\end{lstlisting}
+
+\subsection{Legibility Classifier and Training Configuration}
+
+\begin{lstlisting}[caption={\texttt{LegibilityModel} --- ResNet-18 binary legibility classifier with class-imbalance-weighted BCE loss and the \texttt{ReduceLROnPlateau} scheduler configuration (factor 0.6) used in Section~\ref{sec:legibility-training}.}]
+class LegibilityModel(nn.Module):
+    def __init__(self, pretrained=True, dropout=0.25):
+        super().__init__()
+        weights = torchvision.models.ResNet18_Weights.DEFAULT if pretrained else None
+        backbone = torchvision.models.resnet18(weights=weights)
+        num_f = backbone.fc.in_features
+        backbone.fc = nn.Sequential(nn.Dropout(dropout), nn.Linear(num_f, 1))
+        self.backbone = backbone
+
+    def forward(self, x):
+        return self.backbone(x).squeeze(1)  # raw logits
+
+model = LegibilityModel(pretrained=True).to(DEVICE)
+
+# pos_weight = (#negative / #positive) to counter class imbalance
+num_pos = sum(train_labels_l)
+num_neg = len(train_labels_l) - num_pos
+pos_weight = torch.tensor([num_neg / max(1, num_pos)], dtype=torch.float32).to(DEVICE) \
+    if num_pos > 0 else torch.tensor([1.0], dtype=torch.float32).to(DEVICE)
+
+criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-4)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode="min", factor=0.6, patience=2
+)
+\end{lstlisting}
+
+\section{Video Pipeline --- Selected Code Excerpts}
+\label{sec:appx-video-code}
+
+\subsection{PARSeq Recognizer with Automatic EasyOCR Fallback}
+
+\begin{lstlisting}[caption={\texttt{JerseyRecognizer} --- attempts to load PARSeq at start-up and falls back to EasyOCR if unavailable (Section~\ref{sec:models}). This is the exact fallback mechanism illustrated in Figure~\ref{fig:video-step6-ocr}.}]
+class JerseyRecognizer:
+    def __init__(self, device="cpu"):
+        self.device = device
+        self.backend = None
+        self.model = None
+        self.img_transform = None
+
+        try:
+            self.model = torch.hub.load(
+                "baudm/parseq", "parseq",
+                pretrained=True, trust_repo=True,
+            ).eval().to(device)
+
+            from strhub.data.module import SceneTextDataModule
+            self.img_transform = SceneTextDataModule.get_transform(
+                self.model.hparams.img_size
+            )
+            self.backend = "parseq"
+            print("[OCR] Using PARSeq backend.")
+
+        except Exception as e:
+            print(f"[OCR] PARSeq unavailable ({e}); falling back to EasyOCR.")
+
+        if self.backend is None:
+            import easyocr
+            self.model = easyocr.Reader(["en"], gpu=(device != "cpu"))
+            self.backend = "easyocr"
+            print("[OCR] Using EasyOCR backend.")
+
+    @staticmethod
+    def _clean(text):
+        digits = re.sub(r"\D", "", str(text))
+        if not digits:
+            return None
+        digits = digits[:2]
+        try:
+            v = int(digits)
+        except Exception:
+            return None
+        return str(v) if 0 <= v <= 99 else None
+
+    def recognize(self, roi_bgr):
+        if roi_bgr is None or roi_bgr.size == 0:
+            return None, 0.0
+
+        if self.backend == "parseq":
+            from PIL import Image
+            rgb = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2RGB)
+            pil = Image.fromarray(rgb)
+            with torch.no_grad():
+                inp = self.img_transform(pil).unsqueeze(0).to(self.device)
+                logits = self.model(inp)
+                probs = logits.softmax(-1)
+                preds, confs = self.model.tokenizer.decode(probs)
+            text = preds[0] if preds else ""
+            conf = (float(np.mean(confs[0].cpu().numpy()))
+                    if len(confs) and len(confs[0]) else 0.0)
+            num = self._clean(text)
+            return (num, conf) if num else (None, 0.0)
+
+        # EasyOCR fallback path
+        res = self.model.readtext(
+            roi_bgr, allowlist="0123456789", detail=1, paragraph=False,
+        )
+        best, best_conf = None, 0.0
+        for _, text, conf in res:
+            n = self._clean(text)
+            if n and conf > best_conf:
+                best, best_conf = n, float(conf)
+        return (best, best_conf) if best else (None, 0.0)
+\end{lstlisting}
+
+\subsection{Temporal Role and Jersey Voting}
+
+\begin{lstlisting}[caption={\texttt{TemporalRoleVoter} and \texttt{TemporalJerseyVoter} --- confidence-weighted temporal aggregation for referee exclusion and jersey-number consensus (Section~\ref{sec:temporal-voting}, Equation~\ref{eq:temporal-vote}).}]
+class TemporalRoleVoter:
+    def __init__(self, window=20, ref_ratio=0.6, min_votes=5):
+        self.window = window
+        self.ref_ratio = ref_ratio
+        self.min_votes = min_votes
+        self.history = defaultdict(lambda: deque(maxlen=window))
+        self._locked = set()
+
+    def observe(self, tid, class_name):
+        if tid is None:
+            return
+        tid = int(tid)
+        self.history[tid].append(1 if class_name == "referee" else 0)
+        obs = self.history[tid]
+        if len(obs) >= self.min_votes:
+            r = sum(obs) / len(obs)
+            if r >= self.ref_ratio:
+                self._locked.add(tid)
+            elif tid in self._locked and r < self.ref_ratio * 0.5:
+                self._locked.discard(tid)
+
+    def is_referee(self, tid):
+        return tid is not None and int(tid) in self._locked
+
+
+class TemporalJerseyVoter:
+    def __init__(self, window=60, min_conf=0.25, min_votes=3):
+        self.window = window
+        self.min_conf = min_conf
+        self.min_votes = min_votes
+        self.history = defaultdict(lambda: deque(maxlen=window))
+        self._final = {}
+
+    def add(self, tid, number, conf):
+        if tid is None or number is None or conf < self.min_conf:
+            return
+        self.history[int(tid)].append((str(number), float(conf)))
+
+    def vote(self, tid):
+        if tid is None:
+            return None
+        tid = int(tid)
+        obs = self.history.get(tid)
+        if not obs or len(obs) < self.min_votes:
+            return self._final.get(tid)
+        w = Counter()
+        for number, conf in obs:
+            w[str(number)] += float(conf)
+        best = w.most_common(1)[0][0]
+        self._final[tid] = best
+        return best
+\end{lstlisting}
+
+\subsection{Ground-Truth Tracking and Jersey-Number Evaluator}
+
+\begin{lstlisting}[caption={\texttt{GroundTruthTrackingAndJerseyEvaluator} --- initialization and accumulator structure for the ground-truth evaluation described in Section~\ref{sec:gt-eval}.}]
+class GroundTruthTrackingAndJerseyEvaluator:
+    def __init__(self, csv_path, iou_threshold=0.30, frame_offset=0):
+        self.csv_path = csv_path
+        self.iou_threshold = float(iou_threshold)
+        self.frame_offset = int(frame_offset)
+        self.available = False
+
+        self.gt_by_frame = defaultdict(list)
+        self.gt_total_boxes = 0
+
+        # OCR evaluation accumulators
+        self.track_gt_votes = defaultdict(Counter)
+        self.track_gtid_votes = defaultdict(Counter)
+        self.track_match_count = Counter()
+        self.match_rows = []
+        self.total_obs = 0
+        self.total_iou_hits = 0
+
+        # Tracking evaluation accumulators
+        self.pred_to_gt_votes = defaultdict(Counter)
+        self.gt_to_pred_votes = defaultdict(Counter)
+        self.gt_frame_matches = defaultdict(list)
+        self.association_rows = []
+
+        # Frame-level OCR classification rows (filled after temporal voting)
+        self.frame_ocr_rows = []
+
+        if csv_path and os.path.exists(csv_path):
+            self._load_csv(csv_path)
+            self.available = True
+
+    def _load_csv(self, csv_path):
+        df = pd.read_csv(csv_path)
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        # required columns: track_id, frame, jersey_number, x1, y1, x2, y2, ...
+        ...
+\end{lstlisting}
