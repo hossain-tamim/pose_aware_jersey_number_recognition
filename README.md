@@ -87,9 +87,9 @@ Video-pipeline tracking quality is measured with standard MOT metrics (MOTA, MOT
 
 | Metric | Score |
 |---|---|
-| Image-pipeline accuracy | _85%_ |
+| Image-pipeline test-accuracy | _80%_ |
 | Video-pipeline (RAW) | _67.15%_ |
-| Video-pipeline (vote) | _84.53%_ |
+| Video-pipeline (temporal_voting) | _84.53%_ |
 | Jersey number accuracy (video gt_eval) | _74.78%_ |
 
 ## Report
